@@ -1,0 +1,422 @@
+openapi: 3.0.3
+info:
+  title: Directory Creation Wizard API
+  version: 1.0.0
+  description: API for managing multi-tenant directory site creation and management
+
+paths:
+  /api/tenants:
+    post:
+      summary: Create new tenant wizard session
+      description: Initializes a new tenant creation session with basic information
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - domain
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                  example: "Local Restaurant Directory"
+                domain:
+                  type: string
+                  pattern: "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+                  example: "restaurants-downtown"
+                description:
+                  type: string
+                  maxLength: 500
+                  example: "A comprehensive directory of local restaurants"
+      responses:
+        '201':
+          description: Tenant session created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  domain:
+                    type: string
+                  status:
+                    type: string
+                    enum: [DRAFT]
+                  session_id:
+                    type: string
+                    format: uuid
+                  next_step:
+                    type: string
+                    enum: [BRANDING]
+        '409':
+          description: Domain already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/tenants/{tenantId}:
+    get:
+      summary: Get tenant details
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Tenant details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '404':
+          description: Tenant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/tenants/{tenantId}/branding:
+    put:
+      summary: Update tenant branding configuration
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                logo:
+                  type: string
+                  format: binary
+                  description: Logo image file (PNG, JPG, SVG)
+                primary_color:
+                  type: string
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+                  example: "#3B82F6"
+                secondary_color:
+                  type: string
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+                  example: "#1E40AF"
+                accent_color:
+                  type: string
+                  pattern: "^#[0-9A-Fa-f]{6}$"
+                  example: "#F59E0B"
+                font_family:
+                  type: string
+                  enum: ["Inter", "Roboto", "Open Sans", "Poppins", "custom"]
+                font_file:
+                  type: string
+                  format: binary
+                  description: Custom font file (WOFF, WOFF2, TTF)
+      responses:
+        '200':
+          description: Branding updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tenant_id:
+                    type: string
+                    format: uuid
+                  branding:
+                    $ref: '#/components/schemas/TenantBranding'
+                  next_step:
+                    type: string
+                    enum: [CATEGORIES]
+
+  /api/tenants/{tenantId}/upload:
+    post:
+      summary: Upload categories or listings data
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [categories, listings]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: JSON file for categories, CSV file for listings
+      responses:
+        '200':
+          description: File uploaded and validated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file_id:
+                    type: string
+                    format: uuid
+                  type:
+                    type: string
+                    enum: [categories, listings]
+                  filename:
+                    type: string
+                  records_count:
+                    type: integer
+                  validation_status:
+                    type: string
+                    enum: [VALID]
+                  next_step:
+                    type: string
+                    enum: [LISTINGS, PREVIEW]
+        '422':
+          description: File validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  validation_errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        line:
+                          type: integer
+                        field:
+                          type: string
+                        message:
+                          type: string
+
+  /api/tenants/{tenantId}/preview:
+    get:
+      summary: Generate tenant site preview
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Preview generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preview_url:
+                    type: string
+                    format: uri
+                    example: "https://preview.platform.com/tenant-123"
+                  expires_at:
+                    type: string
+                    format: date-time
+                  statistics:
+                    type: object
+                    properties:
+                      categories_count:
+                        type: integer
+                      listings_count:
+                        type: integer
+                      media_files_count:
+                        type: integer
+        '422':
+          description: Preview generation failed - missing required data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/tenants/{tenantId}/publish:
+    post:
+      summary: Publish tenant site
+      description: Provisions all external services and makes the tenant site live
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Publishing job started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    format: uuid
+                  tenant_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [QUEUED]
+                  estimated_duration:
+                    type: integer
+                    description: Estimated completion time in seconds
+        '422':
+          description: Tenant not ready for publishing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/tenants/{tenantId}/jobs/{jobId}:
+    get:
+      summary: Get provisioning job status
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvisioningJob'
+
+components:
+  schemas:
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        domain:
+          type: string
+        status:
+          type: string
+          enum: [DRAFT, PREVIEW, PUBLISHED, UPDATING, FAILED]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        branding:
+          $ref: '#/components/schemas/TenantBranding'
+
+    TenantBranding:
+      type: object
+      properties:
+        logo_url:
+          type: string
+          format: uri
+          nullable: true
+        primary_color:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        secondary_color:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        accent_color:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        font_family:
+          type: string
+        font_url:
+          type: string
+          format: uri
+          nullable: true
+
+    ProvisioningJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [CREATE, UPDATE, DELETE, REPUBLISH]
+        status:
+          type: string
+          enum: [QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        current_step:
+          type: string
+        steps_total:
+          type: integer
+        steps_completed:
+          type: integer
+        error_message:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true

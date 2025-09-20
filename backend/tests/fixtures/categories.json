@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Restaurants",
+    "slug": "restaurants",
+    "description": "Local dining establishments",
+    "icon": "utensils",
+    "sort_order": 1,
+    "children": [
+      {
+        "name": "Fine Dining",
+        "slug": "fine-dining",
+        "description": "Upscale restaurants",
+        "sort_order": 1
+      },
+      {
+        "name": "Casual Dining",
+        "slug": "casual-dining",
+        "description": "Relaxed dining experience",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "name": "Shopping",
+    "slug": "shopping",
+    "description": "Retail stores and services",
+    "icon": "shopping-bag",
+    "sort_order": 2,
+    "children": [
+      {
+        "name": "Clothing",
+        "slug": "clothing",
+        "description": "Fashion and apparel",
+        "sort_order": 1
+      }
+    ]
+  }
+]

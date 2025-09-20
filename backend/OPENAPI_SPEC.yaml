@@ -1,0 +1,1762 @@
+openapi: 3.0.3
+info:
+  title: Directory Wizard API
+  description: |
+    Multi-tenant Directory Creation Wizard API for creating and managing directory websites
+    through a guided interface with integrated external service provisioning.
+  version: 1.0.0
+  contact:
+    name: Directory Wizard Support
+    email: support@directorywizard.com
+    url: https://docs.directorywizard.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.directorywizard.com/api
+    description: Production server
+  - url: https://staging-api.directorywizard.com/api
+    description: Staging server
+  - url: http://localhost:3001/api
+    description: Development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Check API service status
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /auth/register:
+    post:
+      summary: Register new user
+      description: Create a new user account with validation
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /auth/login:
+    post:
+      summary: User login
+      description: Authenticate user and receive JWT token
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/profile:
+    get:
+      summary: Get user profile
+      description: Retrieve current user profile information
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /tenants:
+    post:
+      summary: Create tenant
+      description: Create a new tenant (directory site)
+      tags:
+        - Tenants
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantRequest'
+      responses:
+        '201':
+          description: Tenant created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantCreateResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /tenants/{id}:
+    get:
+      summary: Get tenant
+      description: Retrieve tenant details by ID
+      tags:
+        - Tenants
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200':
+          description: Tenant details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      summary: Update tenant
+      description: Update tenant basic information
+      tags:
+        - Tenants
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTenantRequest'
+      responses:
+        '200':
+          description: Tenant updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantUpdateResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /tenants/{id}/branding:
+    put:
+      summary: Update tenant branding
+      description: Update tenant branding and theme with file uploads
+      tags:
+        - Tenants
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BrandingRequest'
+      responses:
+        '200':
+          description: Branding updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandingResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '413':
+          $ref: '#/components/responses/FileTooLargeError'
+
+  /tenants/{id}/upload:
+    post:
+      summary: Upload data file
+      description: Upload categories or listings data file
+      tags:
+        - Tenants
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [categories, listings]
+          description: Type of data file to upload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FileUploadRequest'
+      responses:
+        '200':
+          description: File uploaded and processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '413':
+          $ref: '#/components/responses/FileTooLargeError'
+        '422':
+          $ref: '#/components/responses/FileValidationError'
+
+  /tenants/{id}/preview:
+    get:
+      summary: Get tenant preview
+      description: Generate tenant preview with statistics and structure
+      tags:
+        - Tenants
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, html, template, metadata]
+            default: json
+          description: Response format
+        - name: include_content
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Include full content in response
+        - name: include_drafts
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Include draft content
+        - name: max_listings
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+          description: Maximum number of listings to include
+      responses:
+        '200':
+          description: Preview generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewResponse'
+            text/html:
+              schema:
+                type: string
+                description: HTML preview (when format=html)
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /tenants/{id}/publish:
+    post:
+      summary: Publish tenant
+      description: Start tenant publishing process
+      tags:
+        - Tenants
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '202':
+          description: Publishing started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /tenants/{id}/jobs/{jobId}:
+    get:
+      summary: Get job status
+      description: Get publishing job status and progress
+      tags:
+        - Tenants
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /wizard/{sessionId}:
+    get:
+      summary: Get wizard session
+      description: Retrieve wizard session details
+      tags:
+        - Wizard
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Wizard session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WizardSessionResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /wizard/{sessionId}/step:
+    put:
+      summary: Update wizard step
+      description: Update wizard step and session data
+      tags:
+        - Wizard
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WizardStepRequest'
+      responses:
+        '200':
+          description: Wizard step updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WizardStepResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /wizard/{sessionId}/categories:
+    post:
+      summary: Process categories
+      description: Process categories data in wizard context
+      tags:
+        - Wizard
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessCategoriesRequest'
+      responses:
+        '200':
+          description: Categories processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessCategoriesResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /wizard/{sessionId}/listings:
+    post:
+      summary: Process listings
+      description: Process listings data in wizard context
+      tags:
+        - Wizard
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessListingsRequest'
+      responses:
+        '200':
+          description: Listings processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessListingsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /wizard/{sessionId}/complete:
+    post:
+      summary: Complete wizard
+      description: Complete wizard and finalize tenant creation
+      tags:
+        - Wizard
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Wizard completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WizardCompleteResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /claims/{id}/verify:
+    post:
+      summary: Submit claim verification
+      description: Submit verification evidence for a business claim
+      tags:
+        - Claims
+      parameters:
+        - $ref: '#/components/parameters/ClaimId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClaimVerificationRequest'
+      responses:
+        '200':
+          description: Verification submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimVerificationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /users/claims:
+    get:
+      summary: Get user claims
+      description: Retrieve current user's claims with pagination
+      tags:
+        - Users
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, EXPIRED]
+          description: Filter by claim status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Items per page
+      responses:
+        '200':
+          description: User claims retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserClaimsResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /listings/{id}/claim:
+    get:
+      summary: Get claim form data
+      description: Get claim form data for a specific listing
+      tags:
+        - Listings
+      parameters:
+        - $ref: '#/components/parameters/ListingId'
+      responses:
+        '200':
+          description: Claim form data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimFormResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    post:
+      summary: Submit claim
+      description: Submit a new business claim
+      tags:
+        - Listings
+      parameters:
+        - $ref: '#/components/parameters/ListingId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitClaimRequest'
+      responses:
+        '200':
+          description: Claim submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitClaimResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    TenantId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^tnt_[a-zA-Z0-9]+$'
+      description: Tenant ID
+      example: tnt_123456789
+
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^ses_[a-zA-Z0-9]+$'
+      description: Wizard session ID
+      example: ses_987654321
+
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^job_[a-zA-Z0-9]+$'
+      description: Job ID
+      example: job_123456789
+
+    ClaimId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^clm_[a-zA-Z0-9]+$'
+      description: Claim ID
+      example: clm_123456789
+
+    ListingId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^lst_[a-zA-Z0-9]+$'
+      description: Listing ID
+      example: lst_456789
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: Directory Wizard API is running
+        version:
+          type: string
+          example: 1.0.0
+        timestamp:
+          type: string
+          format: date-time
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - firstName
+        - lastName
+        - agreeToTerms
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          minLength: 8
+          example: SecurePassword123!
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: John
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: Smith
+        businessName:
+          type: string
+          maxLength: 100
+          example: ABC Company
+        businessRole:
+          type: string
+          maxLength: 50
+          example: Owner
+        agreeToTerms:
+          type: boolean
+          example: true
+        subscribeToNewsletter:
+          type: boolean
+          example: false
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          example: SecurePassword123!
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        expiresIn:
+          type: string
+          example: 24h
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: usr_123456789
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        firstName:
+          type: string
+          example: John
+        lastName:
+          type: string
+          example: Smith
+        businessName:
+          type: string
+          example: ABC Company
+        businessRole:
+          type: string
+          example: Owner
+        emailVerified:
+          type: boolean
+          example: true
+        subscribeToNewsletter:
+          type: boolean
+          example: false
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserProfile:
+      allOf:
+        - $ref: '#/components/schemas/User'
+
+    CreateTenantRequest:
+      type: object
+      required:
+        - name
+        - domain
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: San Francisco Business Directory
+        domain:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-z0-9-]+$'
+          example: sf-business-directory
+
+    TenantCreateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: tnt_123456789
+        name:
+          type: string
+          example: San Francisco Business Directory
+        domain:
+          type: string
+          example: sf-business-directory
+        status:
+          type: string
+          enum: [DRAFT, UPDATING, PUBLISHED, FAILED]
+          example: DRAFT
+        session_id:
+          type: string
+          example: ses_987654321
+        next_step:
+          type: string
+          example: BRANDING
+        created_at:
+          type: string
+          format: date-time
+
+    UpdateTenantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: Updated Directory Name
+        domain:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-z0-9-]+$'
+          example: updated-domain
+
+    TenantUpdateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: tnt_123456789
+        name:
+          type: string
+          example: Updated Directory Name
+        domain:
+          type: string
+          example: updated-domain
+        status:
+          type: string
+          enum: [DRAFT, UPDATING, PUBLISHED, FAILED]
+          example: DRAFT
+        updated_at:
+          type: string
+          format: date-time
+
+    TenantResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: tnt_123456789
+        name:
+          type: string
+          example: San Francisco Business Directory
+        domain:
+          type: string
+          example: sf-business-directory
+        status:
+          type: string
+          enum: [DRAFT, UPDATING, PUBLISHED, FAILED]
+          example: PUBLISHED
+        branding:
+          $ref: '#/components/schemas/Branding'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategorySummary'
+        listings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingSummary'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        published_at:
+          type: string
+          format: date-time
+
+    Branding:
+      type: object
+      properties:
+        logo_url:
+          type: string
+          format: uri
+          example: https://storage.example.com/logos/logo.png
+        primary_color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: '#3B82F6'
+        secondary_color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: '#1F2937'
+        accent_color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: '#F59E0B'
+        font_family:
+          type: string
+          example: Inter
+        font_url:
+          type: string
+          format: uri
+          example: https://fonts.google.com/inter
+
+    CategorySummary:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cat_123
+        name:
+          type: string
+          example: Restaurants
+        slug:
+          type: string
+          example: restaurants
+        listings_count:
+          type: integer
+          example: 25
+
+    ListingSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          example: lst_456
+        title:
+          type: string
+          example: Best Pizza Place
+        category:
+          type: string
+          example: Restaurants
+        featured:
+          type: boolean
+          example: true
+
+    BrandingRequest:
+      type: object
+      required:
+        - primary_color
+        - secondary_color
+        - accent_color
+        - font_family
+      properties:
+        primary_color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: '#3B82F6'
+        secondary_color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: '#1F2937'
+        accent_color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: '#F59E0B'
+        font_family:
+          type: string
+          example: Inter
+        logo:
+          type: string
+          format: binary
+          description: Logo image file (PNG, JPG, SVG, max 5MB)
+        font_file:
+          type: string
+          format: binary
+          description: Font file (TTF, OTF, WOFF, WOFF2, max 2MB)
+        session_id:
+          type: string
+          example: ses_987654321
+
+    BrandingResponse:
+      type: object
+      properties:
+        tenant_id:
+          type: string
+          example: tnt_123456789
+        branding:
+          $ref: '#/components/schemas/Branding'
+        next_step:
+          type: string
+          example: CATEGORIES
+
+    FileUploadRequest:
+      type: object
+      required:
+        - file
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Data file (CSV, JSON, max 10MB)
+
+    FileUploadResponse:
+      type: object
+      properties:
+        file_id:
+          type: string
+          example: fil_123456789
+        type:
+          type: string
+          enum: [categories, listings]
+          example: categories
+        filename:
+          type: string
+          example: categories.json
+        records_count:
+          type: integer
+          example: 5
+        validation_status:
+          type: string
+          enum: [VALID, INVALID, WARNING]
+          example: VALID
+        next_step:
+          type: string
+          example: LISTINGS
+
+    PreviewResponse:
+      type: object
+      properties:
+        tenant_id:
+          type: string
+          example: tnt_123456789
+        name:
+          type: string
+          example: San Francisco Business Directory
+        domain:
+          type: string
+          example: sf-business-directory
+        status:
+          type: string
+          example: DRAFT
+        preview_url:
+          type: string
+          format: uri
+          example: https://sf-business-directory.example.com/preview
+        admin_url:
+          type: string
+          format: uri
+          example: https://admin.example.com/tenant/tnt_123456789
+        statistics:
+          $ref: '#/components/schemas/Statistics'
+        branding:
+          $ref: '#/components/schemas/Branding'
+        site_structure:
+          $ref: '#/components/schemas/SiteStructure'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryPreview'
+        listings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingPreview'
+        readiness:
+          $ref: '#/components/schemas/ReadinessCheck'
+
+    Statistics:
+      type: object
+      properties:
+        categories_count:
+          type: integer
+          example: 8
+        listings_count:
+          type: integer
+          example: 150
+        media_files_count:
+          type: integer
+          example: 45
+        total_pages:
+          type: integer
+          example: 163
+
+    SiteStructure:
+      type: object
+      properties:
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Page'
+        navigation:
+          type: array
+          items:
+            $ref: '#/components/schemas/NavigationItem'
+
+    Page:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [home, category, listing, page]
+          example: category
+        title:
+          type: string
+          example: Restaurants
+        path:
+          type: string
+          example: /category/restaurants
+        content:
+          type: object
+          description: Page-specific content
+
+    NavigationItem:
+      type: object
+      properties:
+        label:
+          type: string
+          example: Categories
+        path:
+          type: string
+          example: /categories
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/NavigationItem'
+
+    CategoryPreview:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Restaurants
+        slug:
+          type: string
+          example: restaurants
+        description:
+          type: string
+          example: Local dining establishments
+        listings_count:
+          type: integer
+          example: 25
+
+    ListingPreview:
+      type: object
+      properties:
+        title:
+          type: string
+          example: Best Pizza Place
+        slug:
+          type: string
+          example: best-pizza-place
+        description:
+          type: string
+          example: Authentic Italian pizza
+        category:
+          type: string
+          example: Restaurants
+
+    ReadinessCheck:
+      type: object
+      properties:
+        issues:
+          type: array
+          items:
+            type: string
+          example: []
+        warnings:
+          type: array
+          items:
+            type: string
+          example: ["Consider adding more categories for better organization"]
+
+    PublishResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Publishing started
+        job_id:
+          type: string
+          example: job_123456789
+        tenant_id:
+          type: string
+          example: tnt_123456789
+        status:
+          type: string
+          enum: [QUEUED, IN_PROGRESS, COMPLETED, FAILED, CANCELLED]
+          example: QUEUED
+        estimated_duration:
+          type: string
+          example: 2-5 minutes
+
+    JobStatusResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+          example: job_123456789
+        tenant_id:
+          type: string
+          example: tnt_123456789
+        status:
+          type: string
+          enum: [QUEUED, IN_PROGRESS, COMPLETED, FAILED, CANCELLED]
+          example: IN_PROGRESS
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 65
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobStep'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        estimated_completion:
+          type: string
+          format: date-time
+
+    JobStep:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Database Setup
+        status:
+          type: string
+          enum: [PENDING, IN_PROGRESS, COMPLETED, FAILED]
+          example: COMPLETED
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 100
+        duration:
+          type: integer
+          description: Duration in milliseconds
+          example: 1200
+
+    WizardSessionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: ses_987654321
+        tenant_id:
+          type: string
+          example: tnt_123456789
+        current_step:
+          type: string
+          enum: [BASIC_INFO, BRANDING, CATEGORIES, LISTINGS, PREVIEW, PUBLISH]
+          example: BRANDING
+        data:
+          type: object
+          description: Session data
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    WizardStepRequest:
+      type: object
+      required:
+        - step
+      properties:
+        step:
+          type: string
+          enum: [BASIC_INFO, BRANDING, CATEGORIES, LISTINGS, PREVIEW, PUBLISH]
+          example: BRANDING
+        data:
+          type: object
+          description: Step-specific data
+
+    WizardStepResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: ses_987654321
+        current_step:
+          type: string
+          example: BRANDING
+        data:
+          type: object
+          description: Updated session data
+        updated_at:
+          type: string
+          format: date-time
+
+    ProcessCategoriesRequest:
+      type: object
+      required:
+        - categories
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryInput'
+
+    CategoryInput:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Restaurants
+        description:
+          type: string
+          example: Local dining establishments
+        icon:
+          type: string
+          example: restaurant
+        sort_order:
+          type: integer
+          example: 1
+
+    ProcessCategoriesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        created_count:
+          type: integer
+          example: 2
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryOutput'
+
+    CategoryOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cat_123
+        name:
+          type: string
+          example: Restaurants
+        slug:
+          type: string
+          example: restaurants
+        description:
+          type: string
+          example: Local dining establishments
+        sort_order:
+          type: integer
+          example: 1
+
+    ProcessListingsRequest:
+      type: object
+      required:
+        - listings
+      properties:
+        listings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingInput'
+
+    ListingInput:
+      type: object
+      required:
+        - title
+        - description
+        - category
+      properties:
+        title:
+          type: string
+          example: Best Pizza Place
+        description:
+          type: string
+          example: Authentic Italian pizza
+        category:
+          type: string
+          example: Restaurants
+        phone:
+          type: string
+          example: 555-0123
+        email:
+          type: string
+          format: email
+          example: info@pizza.com
+        website:
+          type: string
+          format: uri
+          example: https://pizza.com
+
+    ProcessListingsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        created_count:
+          type: integer
+          example: 1
+        listings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingOutput'
+
+    ListingOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          example: lst_456
+        title:
+          type: string
+          example: Best Pizza Place
+        slug:
+          type: string
+          example: best-pizza-place
+        description:
+          type: string
+          example: Authentic Italian pizza
+        category:
+          type: string
+          example: Restaurants
+        featured:
+          type: boolean
+          example: true
+
+    WizardCompleteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        tenant_id:
+          type: string
+          example: tnt_123456789
+        message:
+          type: string
+          example: Wizard completed successfully
+
+    ClaimVerificationRequest:
+      type: object
+      required:
+        - verification_type
+      properties:
+        verification_type:
+          type: string
+          enum: [EMAIL_DOMAIN, PHONE_NUMBER, BUSINESS_DOCUMENT, UTILITY_BILL]
+          example: EMAIL_DOMAIN
+        evidence_data:
+          type: string
+          description: JSON string with verification details
+          example: '{"domain": "example.com", "email": "owner@example.com"}'
+        evidence_file:
+          type: string
+          format: binary
+          description: Evidence file (PDF, JPG, PNG, max 5MB)
+
+    ClaimVerificationResponse:
+      type: object
+      properties:
+        claim_id:
+          type: string
+          example: clm_123456789
+        verification_id:
+          type: string
+          example: ver_987654321
+        status:
+          type: string
+          example: SUBMITTED
+        evidence_url:
+          type: string
+          format: uri
+          example: https://storage.example.com/evidence/document.pdf
+        estimated_review_time:
+          type: string
+          example: 2-3 business days
+        next_steps:
+          type: array
+          items:
+            type: string
+          example: ["Wait for admin review", "Check email for updates"]
+
+    UserClaimsResponse:
+      type: object
+      properties:
+        claims:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClaimSummary'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    ClaimSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          example: clm_123456789
+        listing_id:
+          type: string
+          example: lst_456
+        listing_title:
+          type: string
+          example: Best Pizza Place
+        business_name:
+          type: string
+          example: Pizza Palace LLC
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, EXPIRED]
+          example: PENDING
+        verification_method:
+          type: string
+          example: EMAIL_DOMAIN
+        submitted_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        last_updated:
+          type: string
+          format: date-time
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 5
+        total_pages:
+          type: integer
+          example: 1
+
+    ClaimFormResponse:
+      type: object
+      properties:
+        listing_id:
+          type: string
+          example: lst_456
+        listing_title:
+          type: string
+          example: Best Pizza Place
+        business_name:
+          type: string
+          example: Pizza Palace LLC
+        current_info:
+          $ref: '#/components/schemas/BusinessInfo'
+        verification_methods:
+          type: array
+          items:
+            $ref: '#/components/schemas/VerificationMethod'
+        claim_window_days:
+          type: integer
+          example: 14
+        terms_url:
+          type: string
+          format: uri
+          example: https://example.com/terms/claims
+
+    BusinessInfo:
+      type: object
+      properties:
+        phone:
+          type: string
+          example: 555-0123
+        email:
+          type: string
+          format: email
+          example: info@pizza.com
+        website:
+          type: string
+          format: uri
+          example: https://pizza.com
+        address:
+          type: string
+          example: 123 Main St, San Francisco, CA
+
+    VerificationMethod:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [EMAIL_DOMAIN, PHONE_NUMBER, BUSINESS_DOCUMENT, UTILITY_BILL]
+          example: EMAIL_DOMAIN
+        label:
+          type: string
+          example: Email Domain Verification
+        description:
+          type: string
+          example: Verify ownership using business email domain
+        requirements:
+          type: array
+          items:
+            type: string
+          example: ["Business email from domain pizza.com"]
+
+    SubmitClaimRequest:
+      type: object
+      required:
+        - verification_method
+        - contact_email
+        - contact_person
+        - relationship
+      properties:
+        verification_method:
+          type: string
+          enum: [EMAIL_DOMAIN, PHONE_NUMBER, BUSINESS_DOCUMENT, UTILITY_BILL]
+          example: EMAIL_DOMAIN
+        contact_email:
+          type: string
+          format: email
+          example: owner@pizza.com
+        contact_person:
+          type: string
+          example: John Smith
+        relationship:
+          type: string
+          enum: [owner, manager, employee, representative]
+          example: owner
+        additional_info:
+          type: string
+          example: I am the owner of this business and need to update the listing information.
+
+    SubmitClaimResponse:
+      type: object
+      properties:
+        claim_id:
+          type: string
+          example: clm_123456789
+        listing_id:
+          type: string
+          example: lst_456
+        status:
+          type: string
+          example: PENDING
+        verification_method:
+          type: string
+          example: EMAIL_DOMAIN
+        contact_email:
+          type: string
+          format: email
+          example: owner@pizza.com
+        expires_at:
+          type: string
+          format: date-time
+        next_steps:
+          type: array
+          items:
+            type: string
+          example: ["Check your email for verification instructions", "Complete verification within 14 days"]
+        estimated_review_time:
+          type: string
+          example: 2-3 business days
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Validation failed
+        message:
+          type: string
+          example: Detailed error description
+        field:
+          type: string
+          example: email
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationErrors:
+      type: object
+      properties:
+        error:
+          type: string
+          example: File validation failed
+        validation_errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+
+    FieldError:
+      type: object
+      properties:
+        row:
+          type: integer
+          example: 2
+        field:
+          type: string
+          example: email
+        message:
+          type: string
+          example: Invalid email format
+        value:
+          type: string
+          example: invalid-email
+
+  responses:
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ForbiddenError:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ConflictError:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    FileTooLargeError:
+      description: File size exceeds limit
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    FileValidationError:
+      description: File content validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrors'
+
+    RateLimitError:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - type: object
+                properties:
+                  retry_after:
+                    type: integer
+                    description: Seconds to wait before retrying
+                    example: 900
+
+tags:
+  - name: Health
+    description: Service health and status endpoints
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Tenants
+    description: Tenant (directory site) management
+  - name: Wizard
+    description: Wizard session and step management
+  - name: Claims
+    description: Business claim verification
+  - name: Users
+    description: User account management
+  - name: Listings
+    description: Business listing management

@@ -1,0 +1,313 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Core tenant entity
+model Tenant {
+  id           String   @id @default(uuid())
+  name         String
+  domain       String   @unique
+  status       TenantStatus @default(DRAFT)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  publishedAt  DateTime? @map("published_at")
+
+  // Relations
+  branding      TenantBranding?
+  categories    Category[]
+  listings      Listing[]
+  adminSessions AdminSession[]
+  provisioningJobs ProvisioningJob[]
+
+  @@map("tenants")
+}
+
+// Tenant branding configuration
+model TenantBranding {
+  id            String @id @default(uuid())
+  tenantId      String @unique @map("tenant_id")
+  logoUrl       String? @map("logo_url") 
+  primaryColor  String @map("primary_color") 
+  secondaryColor String @map("secondary_color") 
+  accentColor   String @map("accent_color") 
+  fontFamily    String @map("font_family") 
+  fontUrl       String? @map("font_url") 
+  themeJson     Json @map("theme_json")
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_branding")
+}
+
+// Hierarchical categories
+model Category {
+  id          String  @id @default(uuid())
+  tenantId    String  @map("tenant_id")
+  parentId    String? @map("parent_id")
+  name        String  
+  slug        String  
+  description String?
+  icon        String? 
+  sortOrder   Int     @default(0) @map("sort_order")
+  isActive    Boolean @default(true) @map("is_active")
+  metadata    Json?
+
+  // Relations
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent     Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children   Category[] @relation("CategoryHierarchy")
+  listings   Listing[]
+
+  @@unique([tenantId, slug])
+  @@map("categories")
+}
+
+// Directory listings
+model Listing {
+  id           String      @id @default(uuid())
+  tenantId     String      @map("tenant_id")
+  categoryId   String      @map("category_id")
+  title        String      
+  slug         String      
+  description  String?
+  status       ListingStatus @default(DRAFT)
+  featured     Boolean     @default(false)
+  data         Json?
+  searchText   String      @map("search_text")
+  coordinates  String?     // Stored as "lat,lng"
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category     Category      @relation(fields: [categoryId], references: [id])
+  media        ListingMedia[]
+  claims       ListingClaim[]
+
+  @@unique([tenantId, slug])
+  @@map("listings")
+}
+
+// Media associated with listings
+model ListingMedia {
+  id         String    @id @default(uuid())
+  listingId  String    @map("listing_id")
+  type       MediaType
+  url        String    
+  filename   String    
+  altText    String?   @map("alt_text")
+  sortOrder  Int       @default(0) @map("sort_order")
+  fileSize   Int       @map("file_size")
+  mimeType   String    @map("mime_type") 
+
+  // Relations
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@map("listing_media")
+}
+
+// User authentication
+model User {
+  id                      String    @id @default(uuid())
+  email                   String    @unique 
+  passwordHash            String    @map("password_hash")
+  firstName               String    @map("first_name") 
+  lastName                String    @map("last_name") 
+  emailVerified           Boolean   @default(false) @map("email_verified")
+  emailVerificationToken  String?   @unique @map("email_verification_token")
+  passwordResetToken      String?   @unique @map("password_reset_token")
+  passwordResetExpires    DateTime? @map("password_reset_expires")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  claims ListingClaim[]
+
+  @@map("users")
+}
+
+// Listing ownership claims
+model ListingClaim {
+  id             String            @id @default(uuid())
+  listingId      String            @map("listing_id")
+  userId         String            @map("user_id")
+  status         ClaimStatus       @default(PENDING)
+  claimMethod    ClaimMethod       @map("claim_method")
+  verificationData Json            @map("verification_data")
+  submittedAt    DateTime          @default(now()) @map("submitted_at")
+  reviewedAt     DateTime?         @map("reviewed_at")
+  reviewerNotes  String?           @map("reviewer_notes")
+  expiresAt      DateTime          @map("expires_at")
+
+  // Relations
+  listing        Listing                    @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user           User                       @relation(fields: [userId], references: [id])
+  verifications  ListingClaimVerification[]
+
+  @@map("listing_claims")
+}
+
+// Claim verification evidence
+model ListingClaimVerification {
+  id               String           @id @default(uuid())
+  claimId          String           @map("claim_id")
+  verificationType VerificationType @map("verification_type")
+  evidenceUrl      String           @map("evidence_url") 
+  evidenceData     Json             @map("evidence_data")
+  verified         Boolean          @default(false)
+  verifiedAt       DateTime?        @map("verified_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  claim ListingClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@map("listing_claim_verifications")
+}
+
+// Admin wizard sessions
+model AdminSession {
+  id        String      @id @default(uuid())
+  tenantId  String?     @map("tenant_id")
+  adminUserId String    @map("admin_user_id")
+  step      WizardStep
+  data      Json?
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  expiresAt DateTime    @map("expires_at")
+
+  // Relations
+  tenant        Tenant?       @relation(fields: [tenantId], references: [id])
+  uploadedFiles UploadedFile[]
+
+  @@map("admin_sessions")
+}
+
+// Temporary file uploads during wizard
+model UploadedFile {
+  id               String           @id @default(uuid())
+  sessionId        String           @map("session_id")
+  type             FileType
+  filename         String           
+  storagePath      String           @map("storage_path") 
+  fileSize         Int              @map("file_size")
+  mimeType         String           @map("mime_type") 
+  validationStatus ValidationStatus @default(PENDING) @map("validation_status")
+  validationErrors Json?            @map("validation_errors")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  session AdminSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("uploaded_files")
+}
+
+// Background provisioning jobs
+model ProvisioningJob {
+  id               String         @id @default(uuid())
+  tenantId         String         @map("tenant_id")
+  type             JobType
+  status           JobStatus      @default(QUEUED)
+  progress         Int            @default(0)
+  currentStep      String         @map("current_step")
+  stepsTotal       Int            @map("steps_total")
+  stepsCompleted   Int            @default(0) @map("steps_completed")
+  errorMessage     String?        @map("error_message")
+  externalRefs     Json?          @map("external_refs")
+  compensationData Json?          @map("compensation_data")
+  startedAt        DateTime?      @map("started_at")
+  completedAt      DateTime?      @map("completed_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("provisioning_jobs")
+}
+
+// Enums
+enum TenantStatus {
+  DRAFT
+  PREVIEW
+  PUBLISHED
+  UPDATING
+  FAILED
+}
+
+enum ListingStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MediaType {
+  IMAGE
+  DOCUMENT
+  VIDEO
+}
+
+enum ClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  VERIFIED
+  EXPIRED
+}
+
+enum ClaimMethod {
+  EMAIL_VERIFICATION
+  PHONE_VERIFICATION
+  DOCUMENT_UPLOAD
+}
+
+enum VerificationType {
+  EMAIL_DOMAIN
+  PHONE_NUMBER
+  BUSINESS_DOCUMENT
+  UTILITY_BILL
+}
+
+enum WizardStep {
+  BASIC_INFO
+  BRANDING
+  CATEGORIES
+  LISTINGS
+  PREVIEW
+  PUBLISH
+}
+
+enum FileType {
+  LOGO
+  CATEGORIES_JSON
+  LISTINGS_CSV
+  MEDIA
+}
+
+enum ValidationStatus {
+  PENDING
+  VALID
+  INVALID
+}
+
+enum JobType {
+  CREATE
+  UPDATE
+  DELETE
+  REPUBLISH
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
